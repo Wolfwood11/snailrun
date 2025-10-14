@@ -1,6 +1,10 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+using UnityEngine.InputSystem.UI;
+#endif
+
 
 /// <summary>
 /// High level coordinator that wires the rhythm manager, snail controller and UI feedback together.
@@ -236,7 +240,13 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        GameObject eventSystemGo = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+
+        GameObject eventSystemGo;
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        eventSystemGo = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
+#else
+        eventSystemGo = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+#endif
         eventSystemGo.transform.SetParent(transform);
     }
 }

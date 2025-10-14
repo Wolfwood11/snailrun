@@ -2,6 +2,11 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+using UnityEngine.InputSystem;
+#endif
+
+
 /// <summary>
 /// Controls the playable snail character by reacting to tap input, driving movement,
 /// animation frames and visual feedback like the slime trail or camera shake.
@@ -98,6 +103,30 @@ public class SnailController : MonoBehaviour
     {
         bool tapDetected = false;
 
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        if (Touchscreen.current != null)
+        {
+            var touches = Touchscreen.current.touches;
+            for (int i = 0; i < touches.Count; i++)
+            {
+                if (touches[i].press.wasPressedThisFrame)
+                {
+                    tapDetected = true;
+                    break;
+                }
+            }
+        }
+
+        if (!tapDetected && Mouse.current != null)
+        {
+            tapDetected = Mouse.current.leftButton.wasPressedThisFrame;
+        }
+
+        if (!tapDetected && Keyboard.current != null)
+        {
+            tapDetected = Keyboard.current.spaceKey.wasPressedThisFrame;
+        }
+#else
         if (Input.touchSupported)
         {
             for (int i = 0; i < Input.touchCount; i++)
@@ -116,6 +145,7 @@ public class SnailController : MonoBehaviour
             tapDetected = Input.GetMouseButtonDown(0);
         }
 
+#endif
         if (tapDetected)
         {
             RegisterTap();

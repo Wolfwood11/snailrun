@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
 using UnityEngine.InputSystem;
 #endif
+
 
 /// <summary>
 /// Controls the playable snail character by reacting to tap input, driving movement,
@@ -142,8 +144,8 @@ public class SnailController : MonoBehaviour
         {
             tapDetected = Input.GetMouseButtonDown(0);
         }
-#endif
 
+#endif
         if (tapDetected)
         {
             RegisterTap();

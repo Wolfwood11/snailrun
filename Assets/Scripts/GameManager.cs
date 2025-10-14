@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 #endif
 
+
 /// <summary>
 /// High level coordinator that wires the rhythm manager, snail controller and UI feedback together.
 /// </summary>
@@ -238,6 +239,7 @@ public class GameManager : MonoBehaviour
         {
             return;
         }
+
 
         GameObject eventSystemGo;
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER

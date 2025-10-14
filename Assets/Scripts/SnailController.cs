@@ -49,6 +49,13 @@ public class SnailController : MonoBehaviour
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
 
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        if (!UnityEngine.InputSystem.EnhancedTouch.EnhancedTouchSupport.enabled)
+        {
+            UnityEngine.InputSystem.EnhancedTouch.EnhancedTouchSupport.Enable();
+        }
+#endif
+
         if (rhythmManager == null)
         {
             rhythmManager = FindObjectOfType<RhythmManager>();
@@ -98,6 +105,68 @@ public class SnailController : MonoBehaviour
     {
         bool tapDetected = false;
 
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        tapDetected = PollInputSystemTap();
+#else
+        tapDetected = PollLegacyInputTap();
+#endif
+
+        if (tapDetected)
+        {
+            RegisterTap();
+        }
+    }
+
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+    private bool PollInputSystemTap()
+    {
+        bool tapDetected = false;
+
+#if ENABLE_INPUT_SYSTEM
+        if (!tapDetected && UnityEngine.InputSystem.EnhancedTouch.EnhancedTouchSupport.enabled)
+        {
+            foreach (var touch in UnityEngine.InputSystem.EnhancedTouch.Touch.activeTouches)
+            {
+                if (touch.phase == UnityEngine.InputSystem.TouchPhase.Began)
+                {
+                    tapDetected = true;
+                    break;
+                }
+            }
+        }
+
+        if (!tapDetected && UnityEngine.InputSystem.Touchscreen.current != null)
+        {
+            foreach (var touch in UnityEngine.InputSystem.Touchscreen.current.touches)
+            {
+                if (touch.phase.ReadValue() == UnityEngine.InputSystem.TouchPhase.Began)
+                {
+                    tapDetected = true;
+                    break;
+                }
+            }
+        }
+
+        if (!tapDetected && UnityEngine.InputSystem.Mouse.current != null)
+        {
+            tapDetected = UnityEngine.InputSystem.Mouse.current.leftButton.wasPressedThisFrame;
+        }
+
+        if (!tapDetected && UnityEngine.InputSystem.Keyboard.current != null)
+        {
+            tapDetected = UnityEngine.InputSystem.Keyboard.current.spaceKey.wasPressedThisFrame;
+        }
+#endif
+
+        return tapDetected;
+    }
+#endif
+
+#if !ENABLE_INPUT_SYSTEM || ENABLE_LEGACY_INPUT_MANAGER
+    private bool PollLegacyInputTap()
+    {
+        bool tapDetected = false;
+
         if (Input.touchSupported)
         {
             for (int i = 0; i < Input.touchCount; i++)
@@ -116,11 +185,9 @@ public class SnailController : MonoBehaviour
             tapDetected = Input.GetMouseButtonDown(0);
         }
 
-        if (tapDetected)
-        {
-            RegisterTap();
-        }
+        return tapDetected;
     }
+#endif
 
     private void RegisterTap()
     {

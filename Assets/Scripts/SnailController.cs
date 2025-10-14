@@ -26,6 +26,7 @@ public class SnailController : MonoBehaviour
     [SerializeField] private TrailRenderer slimeTrail;
     [SerializeField] private ParticleSystem smoothRunParticles;
     [SerializeField] private SimpleCameraShake cameraShake;
+    [SerializeField] private bool translateTransform = false;
 
     private SpriteRenderer spriteRenderer;
     private float currentSpeed;
@@ -34,6 +35,7 @@ public class SnailController : MonoBehaviour
     private float frameTimer;
     private bool playingMoveAnimation;
     private RhythmManager.RhythmState lastRhythmState;
+    private Vector3 initialPosition;
 
     /// <summary>
     /// Current planar speed of the snail.
@@ -45,9 +47,15 @@ public class SnailController : MonoBehaviour
     /// </summary>
     public float NormalisedSpeed => maxSpeed <= 0.001f ? 0f : Mathf.Clamp01(currentSpeed / maxSpeed);
 
+    /// <summary>
+    /// Accumulated distance the snail has conceptually travelled while the world scrolls.
+    /// </summary>
+    public float TravelledDistance { get; private set; }
+
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
+        initialPosition = transform.position;
 
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
         if (!UnityEngine.InputSystem.EnhancedTouch.EnhancedTouchSupport.enabled)
@@ -98,7 +106,7 @@ public class SnailController : MonoBehaviour
         PollInput();
         ApplyPassiveDecay();
         UpdateAnimation(Time.deltaTime);
-        TranslateSnail();
+        UpdateMovement();
     }
 
     private void PollInput()
@@ -255,14 +263,29 @@ public class SnailController : MonoBehaviour
         }
     }
 
-    private void TranslateSnail()
+    private void UpdateMovement()
     {
         if (currentSpeed <= 0f)
         {
+            if (!translateTransform && transform.position != initialPosition)
+            {
+                transform.position = initialPosition;
+            }
+
             return;
         }
 
-        transform.Translate(Vector3.right * currentSpeed * Time.deltaTime);
+        float displacement = currentSpeed * Time.deltaTime;
+        TravelledDistance += displacement;
+
+        if (translateTransform)
+        {
+            transform.Translate(Vector3.right * displacement);
+        }
+        else if (transform.position != initialPosition)
+        {
+            transform.position = initialPosition;
+        }
     }
 
     private void UpdateAnimation(float deltaTime)

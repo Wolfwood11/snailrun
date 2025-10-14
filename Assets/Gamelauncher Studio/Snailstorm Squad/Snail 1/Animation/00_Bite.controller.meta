@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d129404b2e5ebfb43b88181af4982295
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 323055
+  packageName: Snailstorm Squad 2D Animated Character (Creature Series)
+  packageVersion: 1.0.0.1
+  assetPath: Assets/Gamelauncher Studio/Snailstorm Squad/Snail 1/Animation/00_Bite.controller
+  uploadId: 763324

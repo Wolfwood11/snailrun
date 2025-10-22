@@ -142,6 +142,11 @@ public class RhythmManager : MonoBehaviour
     public RhythmState CurrentState => latestState;
 
     /// <summary>
+    /// Target interval in seconds that defines the perfect rhythm window.
+    /// </summary>
+    public float TargetInterval => targetInterval;
+
+    /// <summary>
     /// Resets the rhythm tracking and combo data.
     /// </summary>
     public void ResetRhythm()

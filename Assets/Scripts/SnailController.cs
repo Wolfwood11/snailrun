@@ -16,6 +16,26 @@ public class SnailController : MonoBehaviour
     [SerializeField] private float baseDecay = 1.4f;
     [SerializeField] private float smoothDecay = 0.6f;
 
+    [Header("Energy")]
+    [SerializeField, Min(0f)] private float maxEnergy = 100f;
+    [SerializeField, Min(0f)] private float baseTapEnergyCost = 5f;
+    [SerializeField, Range(0f, 100f), Tooltip("Percentage (0-100) window considered a slight speed up when tapping faster than the rhythm.")]
+    private float slightFastThresholdPercent = 10f;
+    [SerializeField, Range(0f, 100f), Tooltip("Maximum percentage (0-100) speed increase granted when tapping slightly faster than the rhythm.")]
+    private float slightFastMaxSpeedIncreasePercent = 1f;
+    [SerializeField, Range(0f, 100f), Tooltip("Maximum percentage (0-100) extra energy consumed when tapping slightly faster than the rhythm.")]
+    private float slightFastMaxEnergyIncreasePercent = 5f;
+    [SerializeField, Range(0f, 100f), Tooltip("Percentage (0-100) speed increase when tapping much faster than the rhythm.")]
+    private float veryFastSpeedIncreasePercent = 5f;
+    [SerializeField, Range(0f, 100f), Tooltip("Percentage (0-100) extra energy consumed when tapping much faster than the rhythm.")]
+    private float veryFastEnergyIncreasePercent = 10f;
+    [SerializeField, Range(0f, 100f), Tooltip("Percentage (0-100) interval deviation that grants the full slower tap energy reduction.")]
+    private float slowEnergyReductionThresholdPercent = 10f;
+    [SerializeField, Range(0f, 100f), Tooltip("Maximum percentage (0-100) reduction in energy consumption when tapping slower than the rhythm.")]
+    private float slowMaxEnergyReductionPercent = 5f;
+    [SerializeField, Min(0f), Tooltip("Percentage of current speed removed per percentage the tap lags behind the rhythm.")]
+    private float slowSpeedDropPerPercent = 0.5f;
+
     [Header("Animation")]
     [SerializeField] private Sprite idleSprite;
     [SerializeField] private List<Sprite> moveSprites = new List<Sprite>();
@@ -39,6 +59,7 @@ public class SnailController : MonoBehaviour
     private bool playingMoveAnimation;
     private RhythmManager.RhythmState lastRhythmState;
     private Vector3 initialPosition;
+    private float currentEnergy;
 
     /// <summary>
     /// Current planar speed of the snail.
@@ -51,6 +72,16 @@ public class SnailController : MonoBehaviour
     public float NormalisedSpeed => maxSpeed <= 0.001f ? 0f : Mathf.Clamp01(currentSpeed / maxSpeed);
 
     /// <summary>
+    /// Current energy remaining for the snail.
+    /// </summary>
+    public float CurrentEnergy => currentEnergy;
+
+    /// <summary>
+    /// Energy normalised to the configured maximum.
+    /// </summary>
+    public float NormalisedEnergy => maxEnergy <= 0.001f ? 0f : Mathf.Clamp01(currentEnergy / maxEnergy);
+
+    /// <summary>
     /// Accumulated distance the snail has conceptually travelled while the world scrolls.
     /// </summary>
     public float TravelledDistance { get; private set; }
@@ -59,6 +90,11 @@ public class SnailController : MonoBehaviour
     /// Event raised whenever the snail consumes a <see cref="FoodItem"/>.
     /// </summary>
     public event Action<FoodItem> FoodConsumed;
+
+    /// <summary>
+    /// Event raised whenever the energy value changes. Provides the current and maximum energy.
+    /// </summary>
+    public event Action<float, float> EnergyChanged;
 
     private void Awake()
     {
@@ -91,6 +127,9 @@ public class SnailController : MonoBehaviour
         {
             smoothRunParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
+
+        currentEnergy = Mathf.Max(0f, maxEnergy);
+        EnergyChanged?.Invoke(currentEnergy, maxEnergy);
     }
 
     private void OnEnable()
@@ -232,15 +271,12 @@ public class SnailController : MonoBehaviour
             ? rhythmManager.RegisterTap(Time.time)
             : RhythmManager.RhythmState.Default;
 
-        float acceleration = tapAcceleration;
-        if (rhythmState.onBeat)
-        {
-            acceleration *= 1.15f;
-        }
+        float energyCost = Mathf.Max(0f, baseTapEnergyCost);
+        float speedMultiplier = 1f;
+        float penaltyMultiplier = 1f;
 
         if (rhythmState.inSmoothRun)
         {
-            acceleration += smoothRunBonus;
             PlaySmoothRunFeedback();
         }
         else
@@ -248,7 +284,61 @@ public class SnailController : MonoBehaviour
             StopSmoothRunFeedback();
         }
 
+        if (rhythmManager != null)
+        {
+            float targetInterval = rhythmManager.TargetInterval;
+            float interval = rhythmState.interval > 0f ? rhythmState.interval : targetInterval;
+
+            if (targetInterval > 0.0001f && interval > 0f)
+            {
+                float deviationPercent = ((interval - targetInterval) / targetInterval) * 100f;
+
+                if (!rhythmState.onBeat)
+                {
+                    if (deviationPercent < 0f)
+                    {
+                        float fastMagnitude = Mathf.Abs(deviationPercent);
+                        if (fastMagnitude <= slightFastThresholdPercent)
+                        {
+                            float t = slightFastThresholdPercent > 0.0001f
+                                ? Mathf.Clamp01(fastMagnitude / slightFastThresholdPercent)
+                                : 1f;
+                            float speedIncrease = Mathf.Lerp(0f, Mathf.Max(0f, slightFastMaxSpeedIncreasePercent), t) / 100f;
+                            float energyIncrease = Mathf.Lerp(0f, Mathf.Max(0f, slightFastMaxEnergyIncreasePercent), t) / 100f;
+                            speedMultiplier += speedIncrease;
+                            energyCost *= 1f + energyIncrease;
+                        }
+                        else
+                        {
+                            speedMultiplier += Mathf.Max(0f, veryFastSpeedIncreasePercent) / 100f;
+                            energyCost *= 1f + Mathf.Max(0f, veryFastEnergyIncreasePercent) / 100f;
+                        }
+                    }
+                    else if (deviationPercent > 0f)
+                    {
+                        float slowMagnitude = deviationPercent;
+                        float energyReductionThreshold = Mathf.Max(0.0001f, slowEnergyReductionThresholdPercent);
+                        float energyReductionFactor = Mathf.Clamp01(slowMagnitude / energyReductionThreshold);
+                        float energyReduction = Mathf.Clamp(slowMaxEnergyReductionPercent, 0f, 100f) / 100f;
+                        energyCost *= 1f - energyReduction * energyReductionFactor;
+
+                        float speedDropPercent = slowMagnitude * Mathf.Max(0f, slowSpeedDropPerPercent);
+                        float dropMultiplier = Mathf.Clamp01(speedDropPercent / 100f);
+                        penaltyMultiplier = Mathf.Clamp01(1f - dropMultiplier);
+                    }
+                }
+            }
+        }
+
+        float acceleration = tapAcceleration;
+        if (rhythmState.inSmoothRun)
+        {
+            acceleration += smoothRunBonus;
+        }
+
         currentSpeed = Mathf.Min(maxSpeed, currentSpeed + acceleration);
+        currentSpeed = Mathf.Min(maxSpeed, currentSpeed * Mathf.Max(0f, speedMultiplier));
+        currentSpeed *= penaltyMultiplier;
         playingMoveAnimation = true;
         frameTimer = 0f;
         currentFrameIndex = 0;
@@ -259,6 +349,8 @@ public class SnailController : MonoBehaviour
         }
 
         lastRhythmState = rhythmState;
+
+        SpendEnergy(Mathf.Max(0f, energyCost));
     }
 
     private void ApplyPassiveDecay()
@@ -360,6 +452,41 @@ public class SnailController : MonoBehaviour
         if (slimeTrail != null)
         {
             slimeTrail.emitting = true;
+        }
+    }
+
+    private void SpendEnergy(float amount)
+    {
+        if (amount <= 0f)
+        {
+            return;
+        }
+
+        float previousEnergy = currentEnergy;
+        currentEnergy = Mathf.Max(0f, currentEnergy - amount);
+
+        if (!Mathf.Approximately(previousEnergy, currentEnergy))
+        {
+            EnergyChanged?.Invoke(currentEnergy, maxEnergy);
+        }
+    }
+
+    /// <summary>
+    /// Restores energy to the snail, clamped to the configured maximum.
+    /// </summary>
+    public void RestoreEnergy(float amount)
+    {
+        if (amount <= 0f)
+        {
+            return;
+        }
+
+        float previousEnergy = currentEnergy;
+        currentEnergy = Mathf.Min(maxEnergy, currentEnergy + amount);
+
+        if (!Mathf.Approximately(previousEnergy, currentEnergy))
+        {
+            EnergyChanged?.Invoke(currentEnergy, maxEnergy);
         }
     }
 

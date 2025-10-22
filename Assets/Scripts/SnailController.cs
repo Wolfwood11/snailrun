@@ -21,6 +21,9 @@ public class SnailController : MonoBehaviour
     [SerializeField] private List<Sprite> moveSprites = new List<Sprite>();
     [SerializeField] private float moveFrameRate = 16f;
 
+    [Header("Food Consumption")]
+    [SerializeField] private float minimumFoodSpeedBonus = 0.5f;
+
     [Header("References")]
     [SerializeField] private RhythmManager rhythmManager;
     [SerializeField] private TrailRenderer slimeTrail;
@@ -51,6 +54,11 @@ public class SnailController : MonoBehaviour
     /// Accumulated distance the snail has conceptually travelled while the world scrolls.
     /// </summary>
     public float TravelledDistance { get; private set; }
+
+    /// <summary>
+    /// Event raised whenever the snail consumes a <see cref="FoodItem"/>.
+    /// </summary>
+    public event Action<FoodItem> FoodConsumed;
 
     private void Awake()
     {
@@ -107,6 +115,26 @@ public class SnailController : MonoBehaviour
         ApplyPassiveDecay();
         UpdateAnimation(Time.deltaTime);
         UpdateMovement();
+    }
+
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (collision == null)
+        {
+            return;
+        }
+
+        TryConsumeFood(collision.GetComponent<FoodItem>());
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other == null)
+        {
+            return;
+        }
+
+        TryConsumeFood(other.GetComponent<FoodItem>());
     }
 
     private void PollInput()
@@ -286,6 +314,25 @@ public class SnailController : MonoBehaviour
         {
             transform.position = initialPosition;
         }
+    }
+
+    private void TryConsumeFood(FoodItem food)
+    {
+        if (food == null)
+        {
+            return;
+        }
+
+        float speedBonus = Mathf.Max(minimumFoodSpeedBonus, food.SpeedBonus);
+        currentSpeed = Mathf.Min(maxSpeed, currentSpeed + speedBonus);
+        if (currentSpeed > 0.01f)
+        {
+            playingMoveAnimation = true;
+            PlaySmoothRunFeedback();
+        }
+
+        FoodConsumed?.Invoke(food);
+        food.Consume();
     }
 
     private void UpdateAnimation(float deltaTime)

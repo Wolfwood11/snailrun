@@ -339,14 +339,6 @@ public class SnailController : MonoBehaviour
         currentSpeed = Mathf.Min(maxSpeed, currentSpeed + acceleration);
         currentSpeed = Mathf.Min(maxSpeed, currentSpeed * Mathf.Max(0f, speedMultiplier));
         currentSpeed *= penaltyMultiplier;
-        playingMoveAnimation = true;
-        frameTimer = 0f;
-        currentFrameIndex = 0;
-
-        if (moveSprites.Count > 0)
-        {
-            spriteRenderer.sprite = moveSprites[0];
-        }
 
         lastRhythmState = rhythmState;
 
@@ -419,7 +411,6 @@ public class SnailController : MonoBehaviour
         currentSpeed = Mathf.Min(maxSpeed, currentSpeed + speedBonus);
         if (currentSpeed > 0.01f)
         {
-            playingMoveAnimation = true;
             PlaySmoothRunFeedback();
         }
 
@@ -434,22 +425,47 @@ public class SnailController : MonoBehaviour
             return;
         }
 
-        if (!playingMoveAnimation || moveSprites.Count == 0 || currentSpeed <= 0f)
+        bool wasPlaying = playingMoveAnimation;
+        bool hasMoveFrames = moveSprites.Count > 0;
+        bool isMoving = hasMoveFrames && currentSpeed > 0.01f;
+
+        playingMoveAnimation = isMoving;
+
+        if (!isMoving)
         {
-            spriteRenderer.sprite = idleSprite;
-            playingMoveAnimation = false;
+            if (spriteRenderer.sprite != idleSprite)
+            {
+                spriteRenderer.sprite = idleSprite;
+            }
+
+            frameTimer = 0f;
+            currentFrameIndex = 0;
+
+            if (slimeTrail != null && slimeTrail.emitting)
+            {
+                slimeTrail.emitting = false;
+            }
+
             return;
         }
 
-        frameTimer += deltaTime;
-        if (frameTimer >= 1f / Mathf.Max(1f, moveFrameRate))
+        if (!wasPlaying)
         {
-            frameTimer -= 1f / Mathf.Max(1f, moveFrameRate);
+            currentFrameIndex = 0;
+            frameTimer = 0f;
+            spriteRenderer.sprite = moveSprites[currentFrameIndex];
+        }
+
+        float frameDuration = 1f / Mathf.Max(1f, moveFrameRate);
+        frameTimer += deltaTime;
+        if (frameTimer >= frameDuration)
+        {
+            frameTimer -= frameDuration;
             currentFrameIndex = (currentFrameIndex + 1) % moveSprites.Count;
             spriteRenderer.sprite = moveSprites[currentFrameIndex];
         }
 
-        if (slimeTrail != null)
+        if (slimeTrail != null && !slimeTrail.emitting)
         {
             slimeTrail.emitting = true;
         }

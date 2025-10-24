@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -16,12 +17,27 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Text comboText;
     [SerializeField] private Text tempoText;
     [SerializeField] private Slider speedSlider;
+    [SerializeField] private Text speedText;
+    [SerializeField] private Text energyText;
+    [SerializeField] private Text energyConsumptionText;
+
+    [Header("Snail Stats")]
+    [SerializeField, Min(0.1f)] private float energyConsumptionWindow = 3f;
 
     [Header("Tap Feedback")]
     [SerializeField] private CanvasGroup tapFlash;
     [SerializeField] private float tapFlashDuration = 0.15f;
 
     private float tapFlashTimer;
+    private float currentEnergy;
+    private float maxEnergy;
+    private readonly List<EnergySpendSample> energySpendSamples = new List<EnergySpendSample>();
+
+    private struct EnergySpendSample
+    {
+        public float time;
+        public float amount;
+    }
 
     private void Awake()
     {
@@ -37,6 +53,7 @@ public class GameManager : MonoBehaviour
 
         EnsureEventSystemExists();
         EnsureUiExists();
+        UpdateStatLabels();
     }
 
     private void OnEnable()
@@ -44,6 +61,14 @@ public class GameManager : MonoBehaviour
         if (rhythmManager != null)
         {
             rhythmManager.RhythmUpdated += OnRhythmUpdated;
+        }
+
+        if (snailController != null)
+        {
+            snailController.EnergyChanged += OnEnergyChanged;
+            snailController.EnergySpent += OnEnergySpent;
+            currentEnergy = snailController.CurrentEnergy;
+            maxEnergy = snailController.MaxEnergy;
         }
     }
 
@@ -53,12 +78,21 @@ public class GameManager : MonoBehaviour
         {
             rhythmManager.RhythmUpdated -= OnRhythmUpdated;
         }
+
+        if (snailController != null)
+        {
+            snailController.EnergyChanged -= OnEnergyChanged;
+            snailController.EnergySpent -= OnEnergySpent;
+        }
+
+        energySpendSamples.Clear();
     }
 
     private void Update()
     {
         UpdateTapFlash();
         UpdateSpeedSlider();
+        UpdateStatLabels();
     }
 
     private void UpdateSpeedSlider()
@@ -69,6 +103,46 @@ public class GameManager : MonoBehaviour
         }
 
         speedSlider.value = snailController.NormalisedSpeed;
+    }
+
+    private void UpdateStatLabels()
+    {
+        if (snailController == null)
+        {
+            return;
+        }
+
+        if (speedText != null)
+        {
+            speedText.text = $"Скорость: {snailController.CurrentSpeed:0.0} м/с";
+        }
+
+        if (energyText != null)
+        {
+            energyText.text = $"Энергия: {currentEnergy:0}/{maxEnergy:0}";
+        }
+
+        if (energyConsumptionText != null)
+        {
+            float window = Mathf.Max(0.1f, energyConsumptionWindow);
+            float now = Time.time;
+            float total = 0f;
+
+            for (int i = energySpendSamples.Count - 1; i >= 0; i--)
+            {
+                if (now - energySpendSamples[i].time > window)
+                {
+                    energySpendSamples.RemoveAt(i);
+                }
+                else
+                {
+                    total += energySpendSamples[i].amount;
+                }
+            }
+
+            float rate = total / window;
+            energyConsumptionText.text = $"Расход: {rate:0.0} ед/с";
+        }
     }
 
     private void UpdateTapFlash()
@@ -123,7 +197,8 @@ public class GameManager : MonoBehaviour
 
     private void EnsureUiExists()
     {
-        if (uiCanvas != null && comboText != null && tempoText != null && speedSlider != null)
+        if (uiCanvas != null && comboText != null && tempoText != null && speedSlider != null &&
+            speedText != null && energyText != null && energyConsumptionText != null)
         {
             return;
         }
@@ -207,6 +282,42 @@ public class GameManager : MonoBehaviour
             tapFlash = tapFlashGo.GetComponent<CanvasGroup>();
             tapFlash.alpha = 0f;
         }
+
+        if (speedText == null)
+        {
+            speedText = CreateTextElement("SpeedText", canvasRect, new Vector2(0f, 1f));
+            RectTransform rect = speedText.rectTransform;
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(40f, -40f);
+            rect.sizeDelta = new Vector2(520f, 60f);
+            speedText.alignment = TextAnchor.UpperLeft;
+            speedText.fontSize = 36;
+            speedText.text = "Скорость: 0.0 м/с";
+        }
+
+        if (energyText == null)
+        {
+            energyText = CreateTextElement("EnergyText", canvasRect, new Vector2(0f, 1f));
+            RectTransform rect = energyText.rectTransform;
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(40f, -100f);
+            rect.sizeDelta = new Vector2(520f, 60f);
+            energyText.alignment = TextAnchor.UpperLeft;
+            energyText.fontSize = 36;
+            energyText.text = "Энергия: 0/0";
+        }
+
+        if (energyConsumptionText == null)
+        {
+            energyConsumptionText = CreateTextElement("EnergyConsumptionText", canvasRect, new Vector2(0f, 1f));
+            RectTransform rect = energyConsumptionText.rectTransform;
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(40f, -160f);
+            rect.sizeDelta = new Vector2(520f, 60f);
+            energyConsumptionText.alignment = TextAnchor.UpperLeft;
+            energyConsumptionText.fontSize = 36;
+            energyConsumptionText.text = "Расход: 0.0 ед/с";
+        }
     }
 
     private Text CreateTextElement(string name, RectTransform parent, Vector2 anchor)
@@ -227,6 +338,21 @@ public class GameManager : MonoBehaviour
         text.text = name;
 
         return text;
+    }
+
+    private void OnEnergyChanged(float current, float max)
+    {
+        currentEnergy = current;
+        maxEnergy = max;
+    }
+
+    private void OnEnergySpent(float amount)
+    {
+        energySpendSamples.Add(new EnergySpendSample
+        {
+            time = Time.time,
+            amount = amount
+        });
     }
 
     private void EnsureEventSystemExists()

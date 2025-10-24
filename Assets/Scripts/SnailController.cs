@@ -275,9 +275,12 @@ public class SnailController : MonoBehaviour
         float speedMultiplier = 1f;
         float penaltyMultiplier = 1f;
 
+        bool previouslyInSmoothRun = lastRhythmState.inSmoothRun;
+
         if (rhythmState.inSmoothRun)
         {
-            PlaySmoothRunFeedback();
+            bool enteredSmoothRun = !previouslyInSmoothRun;
+            PlaySmoothRunFeedback(enteredSmoothRun);
         }
         else
         {
@@ -411,7 +414,7 @@ public class SnailController : MonoBehaviour
         currentSpeed = Mathf.Min(maxSpeed, currentSpeed + speedBonus);
         if (currentSpeed > 0.01f)
         {
-            PlaySmoothRunFeedback();
+            PlaySmoothRunFeedback(true);
         }
 
         FoodConsumed?.Invoke(food);
@@ -506,7 +509,7 @@ public class SnailController : MonoBehaviour
         }
     }
 
-    private void PlaySmoothRunFeedback()
+    private void PlaySmoothRunFeedback(bool triggerCameraShake)
     {
         if (slimeTrail != null)
         {
@@ -518,7 +521,7 @@ public class SnailController : MonoBehaviour
             smoothRunParticles.Play();
         }
 
-        if (cameraShake != null)
+        if (triggerCameraShake && cameraShake != null)
         {
             cameraShake.Play(1f);
         }

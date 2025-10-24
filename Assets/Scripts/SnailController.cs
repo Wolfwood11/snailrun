@@ -77,6 +77,11 @@ public class SnailController : MonoBehaviour
     public float CurrentEnergy => currentEnergy;
 
     /// <summary>
+    /// Maximum energy the snail can store.
+    /// </summary>
+    public float MaxEnergy => maxEnergy;
+
+    /// <summary>
     /// Energy normalised to the configured maximum.
     /// </summary>
     public float NormalisedEnergy => maxEnergy <= 0.001f ? 0f : Mathf.Clamp01(currentEnergy / maxEnergy);
@@ -95,6 +100,11 @@ public class SnailController : MonoBehaviour
     /// Event raised whenever the energy value changes. Provides the current and maximum energy.
     /// </summary>
     public event Action<float, float> EnergyChanged;
+
+    /// <summary>
+    /// Event raised whenever the snail spends energy.
+    /// </summary>
+    public event Action<float> EnergySpent;
 
     private void Awake()
     {
@@ -483,6 +493,12 @@ public class SnailController : MonoBehaviour
 
         float previousEnergy = currentEnergy;
         currentEnergy = Mathf.Max(0f, currentEnergy - amount);
+        float spent = Mathf.Max(0f, previousEnergy - currentEnergy);
+
+        if (spent > 0f)
+        {
+            EnergySpent?.Invoke(spent);
+        }
 
         if (!Mathf.Approximately(previousEnergy, currentEnergy))
         {
